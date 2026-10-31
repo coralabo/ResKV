@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.so
+*.o
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.venv/
+# Local benchmark and evaluation outputs.
+/results/
+*.pt
+*.safetensors
+*.ncu-rep

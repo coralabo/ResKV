@@ -1,0 +1,14 @@
+include LICENSE NOTICE README.md CITATION.cff
+include constraints.txt
+recursive-include reskv/csrc *.cu *.cuh
+recursive-include third_party/licenses *.txt
+recursive-include third_party/patches *.patch
+recursive-include docs *.md *.png
+recursive-include .github *.yml *.md
+recursive-include tests *.py
+recursive-include benchmarks *.py
+recursive-include evaluation *.py *.json
+prune results
+prune build
+prune dist
+global-exclude *.py[cod] *.so *.o

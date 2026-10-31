@@ -1,0 +1,26 @@
+name: CPU checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - run: python -m pip install -c constraints.txt -e '.[dev,eval]'
+      - run: ruff check reskv tests benchmarks evaluation
+      - run: ruff format --check reskv tests benchmarks evaluation
+      - run: python -m pytest -q -m 'not cuda'
+      - run: python -m build
+      - name: Test installed wheel outside the checkout
+        run: |
+          python -m pip install --force-reinstall --no-deps dist/*.whl
+          cd "$(mktemp -d)"
+          python -m pytest -q -m 'not cuda' --import-mode=importlib "$GITHUB_WORKSPACE/tests"

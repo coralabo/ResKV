@@ -1,0 +1,24 @@
+ResKV
+Copyright 2026 ResKV authors
+
+Core source is distributed under the Apache License, Version 2.0.
+
+The LongBench metric functions and prompt/generation configuration in
+evaluation/ are derived from THUDM/LongBench (MIT License), retaining their
+dataset-specific scoring semantics. Copyright (c) 2023 THU-KEG & Zhipu AI.
+Source: https://github.com/THUDM/LongBench
+License: third_party/licenses/LongBench-MIT.txt
+
+RULER task scoring follows NVIDIA/RULER's string-match definitions
+(Apache License, Version 2.0).
+Source: https://github.com/NVIDIA/RULER
+
+PyTorch and Transformers are dependencies, distributed separately under
+their respective licenses. This release does not redistribute model weights,
+datasets or CUDA/CUTLASS binaries.
+
+The external Mustafar benchmark and accuracy adapters load Mustafar's model
+from a separately supplied checkout. Compatibility patch excerpts derive from dhjoo98/mustafar
+and retain its Apache-2.0 license. Mustafar's CUDA kernels are built separately.
+Source: https://github.com/dhjoo98/mustafar
+License: third_party/licenses/Mustafar-Apache-2.0.txt

@@ -1,0 +1,105 @@
+--- a/models/llama_mustafar_kernel.py
++++ b/models/llama_mustafar_kernel.py
+@@ -10,6 +10,8 @@
+ from transformers.models.llama.configuration_llama import *
+ from transformers.models.llama.modeling_llama import *
+ from transformers.modeling_attn_mask_utils import _prepare_4d_causal_attention_mask
++from transformers.modeling_flash_attention_utils import _get_unpad_data
++from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input
+ 
+ import mustafar_package
+ 
+@@ -407,10 +409,22 @@
+             input_dtype = query_states.dtype
+             self.generation_count = 0
+ 
+-            attn_output = self._flash_attention_forward(
+-                query_states.transpose(1, 2), key_states.transpose(1, 2), 
+-                value_states.transpose(1, 2), None, q_len, dropout=0.0
+-            )
++            prefill_backend = os.environ.get("MUSTAFAR_PREFILL_ATTN", "sdpa")
++            if prefill_backend == "sdpa":
++                attn_output = F.scaled_dot_product_attention(
++                    query_states,
++                    key_states,
++                    value_states,
++                    dropout_p=0.0,
++                    is_causal=True,
++                    enable_gqa=True,
++                ).transpose(1, 2)
++            else:
++                prefill_attention_mask = attention_mask if prefill_backend == "flash" else None
++                attn_output = self._flash_attention_forward(
++                    query_states.transpose(1, 2), key_states.transpose(1, 2),
++                    value_states.transpose(1, 2), prefill_attention_mask, q_len, dropout=0.0
++                )
+ 
+ 
+             compressed_length = ((kv_seq_len - self.residual_length) // 256) * 256
+@@ -718,11 +732,15 @@
+         if inputs_embeds is None:
+             inputs_embeds = self.embed_tokens(input_ids)
+ 
+-        if getattr(self.config, "_flash_attn_2_enabled", False):
+-            # 2d mask is passed through the layers
++        if (
++            past_key_values is None
++            and os.environ.get("MUSTAFAR_PREFILL_ATTN") in {"flash", "sdpa"}
++        ):
++            # Keep the 2D mask only for the custom prefill implementations.
++            pass
++        elif getattr(self.config, "_flash_attn_2_enabled", False):
+             attention_mask = attention_mask if (attention_mask is not None and 0 in attention_mask) else None
+         else:
+-            # 4d mask is passed through the layers
+             attention_mask = _prepare_4d_causal_attention_mask(
+                 attention_mask, (batch_size, seq_length), inputs_embeds, past_key_values_length
+             )
+@@ -884,6 +902,8 @@
+         )
+ 
+         hidden_states = outputs[0]
++        if labels is None:
++            hidden_states = hidden_states[:, -1:, :]
+         if self.config.pretraining_tp > 1:
+             lm_head_slices = self.lm_head.weight.split(self.vocab_size // self.config.pretraining_tp, dim=0)
+             logits = [F.linear(hidden_states, lm_head_slices[i]) for i in range(self.config.pretraining_tp)]
+--- a/kernel/kernel_wrapper/setup.py
++++ b/kernel/kernel_wrapper/setup.py
+@@ -18,7 +18,20 @@
+ if not os.path.exists(torch_lib_path):
+     raise RuntimeError(f"Could not find torch lib directory at {torch_lib_path}")
+ 
+-os.environ["TORCH_CUDA_ARCH_LIST"] = "Ada"  
++def _maybe_set_cuda_arch_list():
++    if os.environ.get("TORCH_CUDA_ARCH_LIST"):
++        return
++    if torch.cuda.is_available():
++        caps = {torch.cuda.get_device_capability(i) for i in range(torch.cuda.device_count())}
++        arch_list = ";".join(sorted({f"{m}.{n}" for (m, n) in caps}))
++        os.environ["TORCH_CUDA_ARCH_LIST"] = arch_list
++
++_maybe_set_cuda_arch_list()
++
++root_dir = os.path.abspath(os.path.dirname(__file__))
++build_dir = os.path.abspath(os.path.join(root_dir, "../build"))
++extra_obj = os.path.abspath(os.path.join(build_dir, "SpMM_API.o"))
++include_dirs = torch.utils.cpp_extension.include_paths() + [build_dir]
+ 
+ setup(
+     name='mustafar_batched_spmv_package', #pip package name
+@@ -27,8 +40,12 @@
+         CUDAExtension(
+             name='mustafar_package', #import module name
+             sources=['pybind.cpp', 'mustafar_wrapper.cu'], 
+-            extra_objects=['../build/SpMM_API.o'],          
+-            include_dirs=[torch.utils.cpp_extension.include_paths(), '../build'],  
++            extra_objects=[extra_obj],
++            include_dirs=include_dirs,
++            extra_compile_args={
++                "cxx": [f"-D_GLIBCXX_USE_CXX11_ABI={int(torch._C._GLIBCXX_USE_CXX11_ABI)}"],
++                "nvcc": [f"-D_GLIBCXX_USE_CXX11_ABI={int(torch._C._GLIBCXX_USE_CXX11_ABI)}"],
++            },
+             extra_link_args=[f"-L{torch_lib_path}", "-lc10"],
+         )
+     ],

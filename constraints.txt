@@ -1,0 +1,12 @@
+# Python 3.12 reference environment. Apply with: pip install -c constraints.txt ...
+# Dependency ranges and optional extras are declared in pyproject.toml.
+torch==2.8.0
+transformers==4.57.1
+tokenizers==0.22.1
+accelerate==1.10.1
+huggingface-hub==0.36.0
+numpy==2.3.5
+rouge==1.0.1
+jieba==0.42.1
+ninja==1.13.0
+setuptools==80.9.0
