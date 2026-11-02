@@ -66,9 +66,9 @@ actual prediction path.
 ## Build the performance extension
 
 Apply the compatibility patch to the pinned checkout. The patch provides the
-prefill selector, limits inference logits to the last position, and adapts the
-extension build to the active environment. Run these commands once in the
-Mustafar environment:
+prefill selector, limits inference logits to the last position, reuses the MLP
+gate buffer during inference, and adapts the extension build to the active
+environment. Run these commands once in the Mustafar environment:
 
 ```bash
 git -C /path/to/mustafar apply --check /path/to/ResKV/third_party/patches/mustafar-compat.patch
@@ -99,6 +99,7 @@ python /path/to/ResKV/benchmarks/mustafar.py --mustafar-root /path/to/mustafar \
 Select `--sparsity 0.5` or `0.75`. Prefill uses PyTorch SDPA; decode uses
 Mustafar's sparse kernels.
 The performance adapter's group size defaults to 32.
+For large batches, use the [shared allocator setting](benchmarks.md#timing-and-memory).
 
 For a joint batch sweep, return to the ResKV environment and repository root:
 

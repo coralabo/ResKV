@@ -1,8 +1,22 @@
 # ResKV: Residual-based Channel-wise Unstructured Pruning for KV Cache Compression
 
-![ResKV compression overview](docs/assets/compression.png)
+<p align="center">
+  <img src="docs/assets/compression.png" alt="ResKV compression overview" width="640">
+</p>
 
-## Installation
+## Table of contents
+
+- [Getting started](#getting-started)
+- [Experiments](#experiments)
+  - [Accuracy](#accuracy-experiments)
+  - [Performance](#performance-experiments)
+- [Citation](#citation)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
+
+## Getting started
+
+### Installation
 
 Use Linux and Python 3.12. [constraints.txt](constraints.txt) pins the environment:
 PyTorch 2.8.0, Transformers 4.57.1 and CUDA 12.8.
@@ -30,7 +44,7 @@ nvcc --version
 nvidia-smi
 ```
 
-## Models and data
+### Models and data
 
 Use local Hugging Face checkpoint directories. Authenticate with `hf auth login`
 when downloading gated models.
@@ -56,7 +70,9 @@ Generate RULER inputs for each model's tokenizer at 16K context length using the
 [data preparation instructions](docs/evaluation.md#prepare-ruler-data). Keep a
 separate dataset directory for each tokenizer.
 
-## Accuracy experiments
+## Experiments
+
+### Accuracy experiments
 
 The accuracy path clusters pre-RoPE Keys and Values, sparsifies the residuals,
 optionally quantizes them, and reconstructs dense KV for attention. Defaults are
@@ -74,7 +90,7 @@ task. The [evaluation guide](docs/evaluation.md) describes the input fields.
 Set the checkpoint and output directory for each model/configuration. Add
 `--limit 2` to a generation command for a short run; omit it to process the task.
 
-### LongBench
+#### LongBench
 
 Run all 16 English and code tasks, then compute their unweighted mean score:
 
@@ -97,7 +113,7 @@ reskv-score --suite longbench --input "$reskv_output" --output "$reskv_output/sc
 For Qwen3, set `reskv_model=/models/qwen3-8b` and a separate output directory.
 Change `reskv_sparsity` and `reskv_bits` for the other configurations above.
 
-### RULER
+#### RULER
 
 Prepare all 13 tasks for the selected checkpoint before running this loop:
 
@@ -123,7 +139,7 @@ Each task writes prediction JSONL and a sibling `.summary.json`. Scoring can be
 run separately on the saved predictions. The [Mustafar adapter](docs/mustafar.md)
 uses the same task inputs and scorer for accuracy comparisons.
 
-## Performance experiments
+### Performance experiments
 
 Use FP16 Llama-3.1-8B-Instruct, 8192 input tokens and 2048 output tokens. The
 performance interface evaluates **50% or 75% sparsity without quantization**.
@@ -152,6 +168,25 @@ include prefill time, decode TPOT, end-to-end throughput and peak allocated
 memory; `summary.json` aggregates repeated runs. See the [benchmark guide](docs/benchmarks.md)
 for single-method commands, metric definitions and kernel measurements.
 
+## Citation
+
+If you use ResKV in your research, please cite our NeurIPS 2026 paper:
+
+```bibtex
+@inproceedings{chen2026reskv,
+  title     = {{ResKV}: Residual-based Channel-wise Unstructured Pruning for {KV} Cache Compression},
+  author    = {Yue Chen and Jinze Li and Dajiang Liu},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2026}
+}
+```
+
 ## License
 
 [Apache-2.0](LICENSE). Third-party attributions are listed in [NOTICE](NOTICE).
+
+## Acknowledgments
+
+We thank the [Mustafar](https://github.com/dhjoo98/mustafar) authors for releasing
+their code, which supports the accuracy and performance comparisons in this
+repository.

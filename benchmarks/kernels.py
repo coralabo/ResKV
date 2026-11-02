@@ -36,6 +36,12 @@ def main():
     parser.add_argument("--batch-sizes", type=int, nargs="+", default=[1, 16])
     parser.add_argument("--seq-len", type=int, default=8192)
     parser.add_argument("--sparsities", type=float, nargs="+", choices=[0.5, 0.75], default=[0.5, 0.75])
+    parser.add_argument(
+        "--reskv-implementation",
+        choices=["default", "unstructure"],
+        default="default",
+        help="ResKV implementation; default selects automatically for the sparsity and batch size",
+    )
     parser.add_argument("--output", type=Path, default=Path("results/kernels.json"))
     args = parser.parse_args()
     if args.seq_len < 1 or min(args.batch_sizes) < 1:
@@ -44,7 +50,10 @@ def main():
     records = []
     for b in args.batch_sizes:
         for sparsity in args.sparsities:
-            cfg = ResKVKernelConfig(sparsity=sparsity)
+            cfg = ResKVKernelConfig(
+                sparsity=sparsity,
+                layout="unstructured" if args.reskv_implementation == "unstructure" else "auto",
+            )
             torch.manual_seed(42)
             shape = (b, 8, args.seq_len, 128)
             k = torch.randn(shape, device="cuda", dtype=torch.float16) * 0.5
@@ -78,7 +87,7 @@ def main():
             }
             records.append(record)
             print(json.dumps(record), flush=True)
-            del k, v, cache, ref
+            del make, fn, k, v, q, kc, vc, ki, vi, cache, out, ref
     write_json(
         args.output,
         {

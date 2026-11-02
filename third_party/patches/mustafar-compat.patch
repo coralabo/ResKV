@@ -36,7 +36,34 @@
  
  
              compressed_length = ((kv_seq_len - self.residual_length) // 256) * 256
-@@ -718,11 +732,15 @@
+@@ -552,6 +566,17 @@
+         )
+     
+ 
++class LlamaMLP_MUSTAFAR(LlamaMLP):
++    """Reuse the gate activation for inference-only multiplication."""
++
++    def forward(self, hidden_states):
++        if self.training or torch.is_grad_enabled() or getattr(self.config, "pretraining_tp", 1) != 1:
++            return super().forward(hidden_states)
++        gate = self.act_fn(self.gate_proj(hidden_states))
++        gate.mul_(self.up_proj(hidden_states))
++        return self.down_proj(gate)
++
++
+ class LlamaDecoderLayer_MUSTAFAR(nn.Module):
+     def __init__(self, config: LlamaConfig, shared_reduction_workspace=None):
+         super().__init__()
+@@ -562,7 +587,7 @@
+             #else LlamaFlashAttention_MUSTAFAR(config=config)
+             LlamaFlashAttention_MUSTAFAR(config=config, shared_reduction_workspace=shared_reduction_workspace)
+         )
+-        self.mlp = LlamaMLP(config)
++        self.mlp = LlamaMLP_MUSTAFAR(config)
+         self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+         self.post_attention_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+         if config.use_flash == False:
+@@ -718,11 +743,15 @@
          if inputs_embeds is None:
              inputs_embeds = self.embed_tokens(input_ids)
  
@@ -55,7 +82,7 @@
              attention_mask = _prepare_4d_causal_attention_mask(
                  attention_mask, (batch_size, seq_length), inputs_embeds, past_key_values_length
              )
-@@ -884,6 +902,8 @@
+@@ -884,6 +913,8 @@
          )
  
          hidden_states = outputs[0]

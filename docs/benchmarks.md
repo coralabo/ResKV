@@ -56,6 +56,10 @@ shape and up to eight output tokens. Independent timed repeats use fresh caches
 and release unused allocator blocks. Memory includes weights and temporary
 buffers; divide bytes by `1024**3` for GiB. Reserved memory is recorded separately.
 
+ResKV and patched Mustafar reuse the MLP gate buffer during inference. For large
+batches, set `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` consistently for
+all methods to reduce allocator fragmentation.
+
 The launcher writes one JSON and log per method/batch plus `summary.json`.
 Summaries use median latency/throughput and maximum allocated memory over the
 repeats. Input hashes, dtype, environment, revision and decode counts must agree.
@@ -68,7 +72,7 @@ python -m benchmarks.kernels --batch-sizes 1 16 32 --seq-len 8192 \
   --sparsities 0.5 0.75 --output results/performance/kernels.json
 ```
 
-This measures the same automatically selected sparse FP16 implementation as the
-model interface. Compression uses precomputed clusters, so this measurement
+This measures the same sparse FP16 implementations as the model interface.
+Compression uses precomputed clusters, so this measurement
 excludes K-means. Each case first checks attention against the independent FP32
 reference, then reports compression/decode latency and compressed storage.

@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE", "third_party/licenses/*.txt"]
-authors = [{name = "ResKV authors"}]
+authors = [{name = "Yue Chen"}, {name = "Jinze Li"}, {name = "Dajiang Liu"}]
 dependencies = ["torch>=2.8,<2.9", "transformers>=4.57,<4.58", "ninja>=1.11", "accelerate>=1.0"]
 classifiers = ["Development Status :: 3 - Alpha", "Intended Audience :: Science/Research", "Programming Language :: Python :: 3", "Topic :: Scientific/Engineering :: Artificial Intelligence"]
 

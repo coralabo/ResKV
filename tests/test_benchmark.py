@@ -4,6 +4,7 @@
 import argparse
 import importlib
 import sys
+import weakref
 from contextlib import contextmanager
 from types import SimpleNamespace
 
@@ -11,6 +12,37 @@ import pytest
 import torch
 
 from benchmarks import timing
+
+
+@pytest.mark.cuda
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_kernel_sweep_releases_previous_case(tmp_path, monkeypatch):
+    from benchmarks import kernels
+
+    tracked = []
+    original_randn, original_compress = torch.randn, kernels.compress
+
+    def randn(*shape, **kwargs):
+        if shape == ((1, 8, 64, 128),):
+            assert all(ref() is None for ref in tracked)
+        return original_randn(*shape, **kwargs)
+
+    def compress(*args, **kwargs):
+        cache = original_compress(*args, **kwargs)
+        tracked.extend(weakref.ref(x) for x in (*args[:2], cache.key.payload, cache.value.payload))
+        return cache
+
+    monkeypatch.setattr(torch, "randn", randn)
+    monkeypatch.setattr(kernels, "compress", compress)
+    monkeypatch.setattr(kernels, "validate_gpu", lambda parser: None)
+    monkeypatch.setattr(kernels, "event_ms", lambda fn: 0.0)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["kernels", "--batch-sizes", "1", "--seq-len", "64", "--output", str(tmp_path / "kernels.json")],
+    )
+    kernels.main()
+    assert all(ref() is None for ref in tracked)
 
 
 @pytest.mark.parametrize("name", [timing.BENCHMARK_GPU, "  nvidia RTX PRO 6000 Blackwell Server Edition  "])

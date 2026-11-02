@@ -43,6 +43,12 @@ def add_model_arguments(parser):
         "--sparsity", type=float, choices=[0.5, 0.75], default=0.75, help="Fraction of residuals discarded"
     )
     parser.add_argument("--dtype", choices=["fp16", "bf16"], default="fp16")
+    parser.add_argument(
+        "--reskv-implementation",
+        choices=["default", "unstructure"],
+        default="default",
+        help="ResKV implementation; default selects automatically for the sparsity and batch size",
+    )
 
 
 def validate_arguments(parser, args):

@@ -36,7 +36,10 @@ def main():
     config = None
     if args.method == "reskv":
         try:
-            config = ResKVKernelConfig(sparsity=args.sparsity)
+            config = ResKVKernelConfig(
+                sparsity=args.sparsity,
+                layout="unstructured" if args.reskv_implementation == "unstructure" else "auto",
+            )
             config.resolve(args.batch_size)
         except ValueError as exc:
             parser.error(str(exc))

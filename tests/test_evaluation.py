@@ -248,8 +248,7 @@ def test_interrupted_generation_removes_stale_summary(tmp_path, toy_checkpoint):
 @pytest.mark.parametrize("suite,dataset", [("longbench", "trec"), ("ruler", "niah_single_1")])
 @pytest.mark.parametrize("sparsity,bits", [(0.0, 16), (0.75, 16), (0.75, 4)])
 def test_executable_evaluation(tmp_path, toy_checkpoint, monkeypatch, suite, dataset, sparsity, bits):
-    # Installed packages may be reached through a symlink. Report source hashes
-    # using one canonical root, while still exercising the full evaluation CLI.
+    # Resolve package symlinks when hashing evaluation sources.
     package_link = tmp_path / "package-root"
     package_link.symlink_to(Path(evaluation_runner.__file__).resolve().parents[1], target_is_directory=True)
     monkeypatch.setattr(evaluation_runner, "__file__", str(package_link / "evaluation/run.py"))

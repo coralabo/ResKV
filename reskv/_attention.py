@@ -53,30 +53,22 @@ def attention(
         if inv_freq.shape != (64,) or inv_freq.device != query.device:
             raise ValueError("inv_freq must be [64] on the query CUDA device")
         freq = inv_freq.float().contiguous()
-    # FP16 paths do not use quantization scales. Avoid casting actual RoPE
-    # frequencies to an unused FP16 placeholder on every layer/token.
+    # FP16 residuals do not use quantization scales.
     empty = query.new_empty(0)
     suffix = (kh, nh, int(start_position), int(position), float(rope_theta), scale)
     if plan.centroid_fusion == "deferred":
         if plan.layout == "unstructured":
-            # Scale/zero placeholders are unused by the FP16 specialization.
             out, m, normalizer = ext.decode_fp16(
                 q,
                 kc,
                 ki,
                 kp,
                 km,
-                empty,
-                empty,
                 vc,
                 vi,
                 vp,
                 vm,
-                empty,
-                empty,
                 *suffix,
-                16,
-                16,
                 True,
                 plan.splits,
                 freq,

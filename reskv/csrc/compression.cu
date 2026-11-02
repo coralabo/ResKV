@@ -388,7 +388,7 @@ __global__ void compress_residual_multibit_kernel(
 // C++ / Python bindings
 // ============================================================================
 
-// Shared signed quantization binding. No obsolete affine or WMMA layouts.
+// Shared signed residual quantization binding.
 std::vector<torch::Tensor> compress_residual_multibit_qtile(
     torch::Tensor keys, torch::Tensor centroids, torch::Tensor cluster_ids,
     int nnz_per_token, int bitwidth

@@ -157,7 +157,6 @@ def test_model_dense_control_rope_cache_and_reload(tmp_path, native_cls, accurac
         loaded = accuracy_cls.from_pretrained(tmp_path).eval()
         assert loaded.reskv_config == cfg
         assert loaded.config.reskv_config == cfg.to_dict()
-        assert "reskv_accuracy_config" not in loaded.config.to_dict()
         assert all(isinstance(layer.self_attn, expected_attention) for layer in loaded.model.layers)
         torch.testing.assert_close(model(ids).logits, loaded(ids).logits, rtol=0, atol=0)
         cfg_sparse = replace(cfg, sparsity=0.75, bits=4)

@@ -1,4 +1,4 @@
-include LICENSE NOTICE README.md CITATION.cff
+include LICENSE NOTICE README.md
 include constraints.txt
 recursive-include reskv/csrc *.cu *.cuh
 recursive-include third_party/licenses *.txt

@@ -2,6 +2,7 @@
 """Benchmark the external Mustafar Llama model using its sparse CUDA kernels."""
 
 import argparse
+import hashlib
 import importlib
 import os
 import subprocess
@@ -71,6 +72,8 @@ def main():
         "group_size": args.group_size,
         "attention": {"prefill": "sdpa", "decode": "mustafar_sparse_kernels"},
         "mustafar_commit": commit.stdout.strip() if commit.returncode == 0 else None,
+        "mustafar_source_sha256": hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest(),
+        "mlp_implementation": type(model.model.layers[0].mlp).__name__,
         "records": records,
     }
     timing.write_report(args.output, report)

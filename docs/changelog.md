@@ -2,7 +2,7 @@
 
 ## 0.1.0
 
-Initial public release accompanying the ResKV paper.
+Initial public release.
 
 * CUDA inference for Llama: residual compression of pre-RoPE Keys and Values,
   sparse FP16 residuals and fused Flash

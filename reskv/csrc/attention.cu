@@ -622,7 +622,7 @@ __global__ void merge_fp16_dense_recent_kernel(
 
     for (int t = 0; t < T_recent; ++t) {
         if (tid < 32) {
-            // One warp reproduces the original 128D reduction tree exactly:
+            // Reduce the 128D dot product in one warp:
             // (p[d] + p[d+64]) + (p[d+32] + p[d+96]), then strides 16..1.
             // Explicit rounded products prevent fast-math FMA contraction.
             const size_t q_base = (size_t)flat_q * FK16_D + tid;

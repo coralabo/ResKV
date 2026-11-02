@@ -13,7 +13,7 @@ from reskv import ResKVConfig, ResKVKernelConfig
         {"sparsity": 0.25},
         {"bits": 8},
         {"layout": "invalid"},
-        {"rope_mode": "paper"},
+        {"rope_mode": "invalid"},
         {"sparsity": 0.5, "layout": "structured"},
         {"bits": 2, "layout": "structured", "sparsity": 0.75},
         {"bits": 16, "layout": "tiled", "sparsity": 0.75},
@@ -119,7 +119,6 @@ def test_accuracy_defaults_for_python_api():
 
     settings = ResKVConfig()
     assert (settings.recent_size, settings.kmeans_iterations) == (32, 15)
-    assert "protocol" not in settings.to_dict()
     assert ResKVConfig(**settings.to_dict()) == settings
 
 

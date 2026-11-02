@@ -4,11 +4,22 @@
 import torch
 import torch.nn.functional as F
 from transformers import LlamaForCausalLM
-from transformers.models.llama.modeling_llama import LlamaAttention, apply_rotary_pos_emb
+from transformers.models.llama.modeling_llama import LlamaAttention, LlamaMLP, apply_rotary_pos_emb
 
 from .._attention import attention
 from ..cache import ResKVCache
 from ..config import ResKVKernelConfig, _model_settings
+
+
+class ResKVMLP(LlamaMLP):
+    """Reuse the gate activation for inference-only elementwise multiplication."""
+
+    def forward(self, hidden_states):
+        if self.training or torch.is_grad_enabled():
+            return super().forward(hidden_states)
+        gate = self.act_fn(self.gate_proj(hidden_states))
+        gate.mul_(self.up_proj(hidden_states))
+        return self.down_proj(gate)
 
 
 class ResKVAttention(LlamaAttention):
@@ -92,6 +103,7 @@ class ResKVForCausalLM(LlamaForCausalLM):
         self.kernel_config = settings
         for idx, layer in enumerate(self.model.layers):
             layer.self_attn = ResKVAttention(config, idx)
+            layer.mlp = ResKVMLP(config)
         self.post_init()
 
     @classmethod

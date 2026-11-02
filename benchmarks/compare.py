@@ -95,7 +95,7 @@ def command_for(args, method, batch_size, output):
         *common,
     ]
     if method == "reskv":
-        command += ["--sparsity", str(args.sparsity)]
+        command += ["--sparsity", str(args.sparsity), "--reskv-implementation", args.reskv_implementation]
     return command
 
 

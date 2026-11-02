@@ -29,7 +29,6 @@ constexpr int CMASS_THREADS          = CMASS_WARP_SIZE * CMASS_WARPS;
 constexpr int CMASS_HEAD_DIM         = 128;
 constexpr int CMASS_DPT              = CMASS_HEAD_DIM / CMASS_WARP_SIZE;     // 4
 constexpr int CMASS_MAX_NC           = 64;
-constexpr int CMASS_MAX_PW           = 16;
 constexpr int CMASS_MAX_NNZ          = 128;
 
 #ifndef CMASS_TOKENS_PER_WARP
@@ -1179,13 +1178,10 @@ std::vector<torch::Tensor> sparse_fused_kqv_cmass_impl(
     torch::Tensor Q,
     torch::Tensor k_centroids, torch::Tensor k_cluster_ids,
     torch::Tensor k_packed,    torch::Tensor k_bitmap,
-    torch::Tensor k_scale,     torch::Tensor k_zero,
     torch::Tensor v_centroids, torch::Tensor v_cluster_ids,
     torch::Tensor v_packed,    torch::Tensor v_bitmap,
-    torch::Tensor v_scale,     torch::Tensor v_zero,
     int num_kv_heads, int num_q_heads,
     int start_pos, int pos_q, double rope_base, double scaling,
-    int k_bitwidth, int v_bitwidth,
     bool return_stats, int splits, torch::Tensor inv_freq)
 {
     c10::cuda::CUDAGuard guard(Q.device());
@@ -1202,37 +1198,17 @@ std::vector<torch::Tensor> sparse_fused_kqv_cmass_impl(
     const int gqa  = num_q_heads / num_kv_heads;
     const int k_pw = k_packed.size(2);
     const int v_pw = v_packed.size(2);
-    const bool fp16_sparse = true;
-    TORCH_CHECK(k_bitwidth == 16 && v_bitwidth == 16, "Bitmap family requires FP16 residuals");
     const int beta_stride = (nc_v <= 32) ? 32 : CMASS_MAX_NC;
     TORCH_CHECK(gqa == 1 || gqa == 4 || gqa == 8,
                 "cmass fused KQV supports GQA in {1,4,8}, got ", gqa);
     TORCH_CHECK(nc_k <= CMASS_MAX_NC && nc_v <= CMASS_MAX_NC,
                 "cmass fused KQV: clusters exceed ", CMASS_MAX_NC);
-    TORCH_CHECK(
-        fp16_sparse || (k_bitwidth == 2 || k_bitwidth == 4),
-        "cmass fused KQV: k_bitwidth must be 2, 4, or sparse-only 16");
-    TORCH_CHECK(
-        fp16_sparse || (v_bitwidth == 2 || v_bitwidth == 4),
-        "cmass fused KQV: v_bitwidth must be 2, 4, or sparse-only 16");
-    TORCH_CHECK(
-        !((k_bitwidth == 16) ^ (v_bitwidth == 16)),
-        "cmass fused KQV sparse-only requires both K and V bitwidth=16");
-    if (fp16_sparse) {
-        TORCH_CHECK(k_packed.scalar_type() == torch::kFloat16,
-                    "cmass fp16 sparse-only: k_sparse must be fp16");
-        TORCH_CHECK(v_packed.scalar_type() == torch::kFloat16,
-                    "cmass fp16 sparse-only: v_sparse must be fp16");
-        TORCH_CHECK(k_pw <= CMASS_MAX_NNZ && v_pw <= CMASS_MAX_NNZ,
-                    "cmass fp16 sparse-only: nnz exceeds ", CMASS_MAX_NNZ);
-    } else {
-        TORCH_CHECK(k_packed.scalar_type() == torch::kInt32,
-                    "cmass fused KQV: k_packed must be int32 for 2/4-bit");
-        TORCH_CHECK(v_packed.scalar_type() == torch::kInt32,
-                    "cmass fused KQV: v_packed must be int32 for 2/4-bit");
-        TORCH_CHECK(k_pw <= CMASS_MAX_PW && v_pw <= CMASS_MAX_PW,
-                    "cmass fused KQV: packed words exceed ", CMASS_MAX_PW);
-    }
+    TORCH_CHECK(k_packed.scalar_type() == torch::kFloat16,
+                "cmass fp16 sparse-only: k_sparse must be fp16");
+    TORCH_CHECK(v_packed.scalar_type() == torch::kFloat16,
+                "cmass fp16 sparse-only: v_sparse must be fp16");
+    TORCH_CHECK(k_pw <= CMASS_MAX_NNZ && v_pw <= CMASS_MAX_NNZ,
+                "cmass fp16 sparse-only: nnz exceeds ", CMASS_MAX_NNZ);
 
     const int num_splits = splits > 0 ? std::min(splits,T) : cmass_resolve_num_splits(T,B);
     auto float_opts = Q.options().dtype(torch::kFloat32);
@@ -1252,18 +1228,13 @@ std::vector<torch::Tensor> sparse_fused_kqv_cmass_impl(
     // Compute beta smem size based on GQA.  Use compile-time constant matching
     // the dispatched template so the partial kernel sees the correct stride.
     const size_t beta_smem_per_warp = static_cast<size_t>(gqa) * beta_stride * sizeof(float);
-    const size_t smem_size = fp16_sparse
-        ? (nc_k * CMASS_HEAD_DIM * sizeof(__half) +
-           2 * CMASS_WARPS * CMASS_TOKENS_PER_WARP * CMASS_MAX_NNZ * sizeof(__half) +
-           CMASS_WARPS * beta_smem_per_warp)
-        : (nc_k * CMASS_HEAD_DIM * sizeof(__half) +
-           2 * CMASS_WARPS * CMASS_TOKENS_PER_WARP * CMASS_MAX_PW * sizeof(int32_t) +
-           CMASS_WARPS * beta_smem_per_warp);
+    const size_t smem_size = nc_k * CMASS_HEAD_DIM * sizeof(__half) +
+        2 * CMASS_WARPS * CMASS_TOKENS_PER_WARP * CMASS_MAX_NNZ * sizeof(__half) +
+        CMASS_WARPS * beta_smem_per_warp;
 
     dim3 partial_grid(num_splits, num_kv_heads, B);
     dim3 partial_block(CMASS_THREADS);
 
-    if (fp16_sparse) {
 #define CMASS_LAUNCH_FP16_PARTIAL(GQA_VAL, NC_VAL) \
         do { \
             cmass_set_fp16_partial_smem_attr<GQA_VAL, NC_VAL>(smem_size); \
@@ -1283,17 +1254,16 @@ std::vector<torch::Tensor> sparse_fused_kqv_cmass_impl(
                     start_pos, pos_q, static_cast<float>(rope_base), \
                     static_cast<float>(scaling), num_splits, inv_freq.numel() ? inv_freq.data_ptr<float>() : nullptr); \
         } while (0)
-        if (beta_stride == 32) {
-            if      (gqa == 1) { CMASS_LAUNCH_FP16_PARTIAL(1, 32); }
-            else if (gqa == 4) { CMASS_LAUNCH_FP16_PARTIAL(4, 32); }
-            else               { CMASS_LAUNCH_FP16_PARTIAL(8, 32); }
-        } else {
-            if      (gqa == 1) { CMASS_LAUNCH_FP16_PARTIAL(1, CMASS_MAX_NC); }
-            else if (gqa == 4) { CMASS_LAUNCH_FP16_PARTIAL(4, CMASS_MAX_NC); }
-            else               { CMASS_LAUNCH_FP16_PARTIAL(8, CMASS_MAX_NC); }
-        }
-#undef CMASS_LAUNCH_FP16_PARTIAL
+    if (beta_stride == 32) {
+        if      (gqa == 1) { CMASS_LAUNCH_FP16_PARTIAL(1, 32); }
+        else if (gqa == 4) { CMASS_LAUNCH_FP16_PARTIAL(4, 32); }
+        else               { CMASS_LAUNCH_FP16_PARTIAL(8, 32); }
+    } else {
+        if      (gqa == 1) { CMASS_LAUNCH_FP16_PARTIAL(1, CMASS_MAX_NC); }
+        else if (gqa == 4) { CMASS_LAUNCH_FP16_PARTIAL(4, CMASS_MAX_NC); }
+        else               { CMASS_LAUNCH_FP16_PARTIAL(8, CMASS_MAX_NC); }
     }
+#undef CMASS_LAUNCH_FP16_PARTIAL
     cmass_check_launch("sparse_fused_kqv_cmass_partial");
 
     dim3 merge_grid(num_kv_heads, B);

@@ -67,7 +67,7 @@ class ResKVKernelConfig:
         centroid_fusion: How decode adds back the Value centroids. ``per_token``
             adds each token's centroid inside the attention loop; ``deferred``
             accumulates attention mass per cluster and applies the centroids once
-            after the split-K reduction (Value deferred fusion in the paper).
+            after the split-K reduction.
         num_clusters: K-means clusters per head at prefill.
         max_clusters: Centroid limit; each compressed decode group appends one centroid.
         group_size: Tokens compressed together during decode.
