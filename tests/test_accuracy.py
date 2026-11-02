@@ -158,7 +158,11 @@ def test_model_dense_control_rope_cache_and_reload(tmp_path, native_cls, accurac
         assert loaded.reskv_config == cfg
         assert loaded.config.reskv_config == cfg.to_dict()
         assert all(isinstance(layer.self_attn, expected_attention) for layer in loaded.model.layers)
-        torch.testing.assert_close(model(ids).logits, loaded(ids).logits, rtol=0, atol=0)
+        torch.testing.assert_close(model.state_dict(), loaded.state_dict(), rtol=0, atol=0)
+        torch.testing.assert_close(dict(model.named_buffers()), dict(loaded.named_buffers()), rtol=0, atol=0)
+        expected, actual = model(ids).logits, loaded(ids).logits
+        torch.testing.assert_close(expected, actual, rtol=1e-6, atol=1e-7)
+        assert torch.equal(expected.argmax(-1), actual.argmax(-1))
         cfg_sparse = replace(cfg, sparsity=0.75, bits=4)
         compressed = accuracy_cls(config, reskv_config=cfg_sparse).eval()
         compressed.load_state_dict(native.state_dict(), strict=True)
